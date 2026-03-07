@@ -22,6 +22,11 @@ One script to go from zero to a fully secured, multi-agent AI assistant on Disco
 - **Token compression** — OCTAVE protocol for 3-20x compression in multi-agent handoffs (optional)
 - **Observability** — Clawmetry dashboard for token costs, sessions, live message flow (optional)
 - **Security suite** — ClawSec for file integrity, advisory feed, malicious skill detection (optional)
+- **AI text humanizer** — Humanizer detects and removes AI writing patterns (optional)
+- **Continuous learning** — Self-Improving Agent captures errors and lessons across sessions (optional)
+- **Skill discovery** — Find Skills helps agents install new capabilities on-the-fly (optional)
+- **Marketing toolkit** — 15+ marketing reference skills for copywriting, CRO, SEO, and more (optional)
+- **Host hardening** — Healthcheck audits firewall, SSH, updates, and exposure (optional)
 
 ## Quick Start
 
@@ -42,7 +47,7 @@ The setup wizard will:
 2. Create your `.env` file (gitignored, never committed)
 3. Generate `openclaw.json` with `${VAR}` references to your `.env`
 4. Create agent workspaces with security rules + WAL Protocol pre-baked
-5. Offer optional tools: Graphthulhu, ApiTap, Scrapling, GitHub, Playwright, OCTAVE, Clawmetry, ClawSec
+5. Offer optional tools: Graphthulhu, ApiTap, Scrapling, GitHub, Playwright, OCTAVE, Humanizer, Self-Improving Agent, Find Skills, Marketing Skills, Healthcheck, Clawmetry, ClawSec
 6. Start the gateway
 
 ## Configuration Tiers
@@ -129,6 +134,11 @@ The setup wizard offers each of these individually. All are free and open-source
 | **[OCTAVE](https://pypi.org/project/octave-mcp/)** | 3-20x token compression for multi-agent handoffs | `pip install octave-mcp` |
 | **[Clawmetry](https://clawmetry.com)** | Real-time observability dashboard (costs, sessions, flow) | `pip install clawmetry` |
 | **[ClawSec](https://github.com/prompt-security/clawsec)** | File integrity, advisory feed, malicious skill detection | Git clone |
+| **[Humanizer](https://github.com/brandonwise/humanizer)** | Detect and remove AI writing patterns (24 patterns, 500+ terms) | `clawhub install` |
+| **Self-Improving Agent** | Capture errors, corrections, and lessons for continuous learning | `clawhub install` |
+| **Find Skills** | Discover and install new skills on-the-fly from ClawHub | `clawhub install` |
+| **Marketing Skills** | 15+ marketing reference skills (copywriting, CRO, SEO, email, ads) | `clawhub install` |
+| **Healthcheck** | Host security audits: firewall, SSH, updates, exposure | Built-in |
 
 See [docs/recommended-tools.md](docs/recommended-tools.md) for detailed install guides.
 

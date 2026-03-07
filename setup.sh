@@ -1063,6 +1063,151 @@ install_github_skill() {
 }
 
 # ============================================================
+# Install Humanizer — AI Writing De-AIification
+# ============================================================
+
+install_humanizer() {
+  echo ""
+  echo -e "${BOLD}--- Humanizer — Natural Writing (Optional) ---${NC}"
+  echo ""
+  info "Detects and removes signs of AI-generated writing."
+  info "Scans for 24 AI patterns, 500+ vocabulary terms, and applies safe auto-replacements."
+  echo ""
+  ask "Install Humanizer? [Y/n]"
+  read -r INSTALL_HUMANIZER
+  INSTALL_HUMANIZER="${INSTALL_HUMANIZER:-Y}"
+
+  if [[ ! "$INSTALL_HUMANIZER" =~ ^[Yy] ]]; then
+    info "Skipping Humanizer."
+    return
+  fi
+
+  if npx clawhub@latest install humanizer 2>/dev/null; then
+    success "Humanizer skill installed"
+  else
+    # Fallback to git clone
+    SKILLS_DIR="$OPENCLAW_DIR/workspace/skills"
+    mkdir -p "$SKILLS_DIR"
+    if git clone --depth 1 https://github.com/brandonwise/humanizer.git "$SKILLS_DIR/humanizer" 2>/dev/null; then
+      success "Humanizer installed from GitHub"
+    else
+      warn "Could not install Humanizer. Install manually: npx clawhub@latest install humanizer"
+    fi
+  fi
+}
+
+# ============================================================
+# Install Self-Improving Agent — Continuous Learning
+# ============================================================
+
+install_self_improving() {
+  echo ""
+  echo -e "${BOLD}--- Self-Improving Agent — Continuous Learning (Optional) ---${NC}"
+  echo ""
+  info "Captures errors, corrections, and lessons learned automatically."
+  info "Enables your agent to learn from mistakes and get better over time."
+  echo ""
+  ask "Install Self-Improving Agent? [Y/n]"
+  read -r INSTALL_SELFIMPROVE
+  INSTALL_SELFIMPROVE="${INSTALL_SELFIMPROVE:-Y}"
+
+  if [[ ! "$INSTALL_SELFIMPROVE" =~ ^[Yy] ]]; then
+    info "Skipping Self-Improving Agent."
+    return
+  fi
+
+  if npx clawhub@latest install self-improving-agent 2>/dev/null; then
+    success "Self-Improving Agent skill installed"
+  else
+    warn "Could not install. Install manually: npx clawhub@latest install self-improving-agent"
+  fi
+}
+
+# ============================================================
+# Install Find Skills — Skill Discovery Helper
+# ============================================================
+
+install_find_skills() {
+  echo ""
+  echo -e "${BOLD}--- Find Skills — Skill Discovery (Optional) ---${NC}"
+  echo ""
+  info "Helps your agent discover and install new skills on-the-fly."
+  info "When you ask 'how do I do X?', the agent can search ClawHub for matching skills."
+  echo ""
+  ask "Install Find Skills? [Y/n]"
+  read -r INSTALL_FINDSKILLS
+  INSTALL_FINDSKILLS="${INSTALL_FINDSKILLS:-Y}"
+
+  if [[ ! "$INSTALL_FINDSKILLS" =~ ^[Yy] ]]; then
+    info "Skipping Find Skills."
+    return
+  fi
+
+  if npx clawhub@latest install find-skills 2>/dev/null; then
+    success "Find Skills installed"
+  else
+    warn "Could not install. Install manually: npx clawhub@latest install find-skills"
+  fi
+}
+
+# ============================================================
+# Install Marketing Skills — Marketing Reference Library
+# ============================================================
+
+install_marketing_skills() {
+  echo ""
+  echo -e "${BOLD}--- Marketing Skills — Marketing Toolkit (Optional) ---${NC}"
+  echo ""
+  info "15+ marketing reference skills covering copywriting, CRO, SEO,"
+  info "email sequences, A/B testing, pricing strategy, and more."
+  echo ""
+  ask "Install Marketing Skills? [Y/n]"
+  read -r INSTALL_MARKETING
+  INSTALL_MARKETING="${INSTALL_MARKETING:-Y}"
+
+  if [[ ! "$INSTALL_MARKETING" =~ ^[Yy] ]]; then
+    info "Skipping Marketing Skills."
+    return
+  fi
+
+  if npx clawhub@latest install marketing-skills 2>/dev/null; then
+    success "Marketing Skills installed"
+  else
+    warn "Could not install. Install manually: npx clawhub@latest install marketing-skills"
+  fi
+}
+
+# ============================================================
+# Install Healthcheck — Host Security Hardening
+# ============================================================
+
+install_healthcheck() {
+  echo ""
+  echo -e "${BOLD}--- Healthcheck — Security Hardening (Optional) ---${NC}"
+  echo ""
+  info "Audits host security: firewall, SSH, updates, exposure."
+  info "Periodic security scans via heartbeat or cron scheduling."
+  echo ""
+  ask "Install Healthcheck? [Y/n]"
+  read -r INSTALL_HEALTHCHECK
+  INSTALL_HEALTHCHECK="${INSTALL_HEALTHCHECK:-Y}"
+
+  if [[ ! "$INSTALL_HEALTHCHECK" =~ ^[Yy] ]]; then
+    info "Skipping Healthcheck."
+    return
+  fi
+
+  # Healthcheck is a built-in skill, just verify it's available
+  HEALTHCHECK_PATH="$(npm root -g)/openclaw/skills/healthcheck"
+  if [ -d "$HEALTHCHECK_PATH" ]; then
+    success "Healthcheck skill available (built-in with OpenClaw)"
+  else
+    warn "Healthcheck skill not found at expected path."
+    info "It should be included with OpenClaw. Try: openclaw --version"
+  fi
+}
+
+# ============================================================
 # Install Playwright MCP — Browser Automation
 # ============================================================
 
@@ -1255,6 +1400,11 @@ main() {
   install_scrapling
   install_github_skill
   install_playwright
+  install_humanizer
+  install_self_improving
+  install_find_skills
+  install_marketing_skills
+  install_healthcheck
 
   # Install NanoFlow Console (if selected)
   if [ "$USE_CONSOLE" = true ]; then

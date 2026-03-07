@@ -119,6 +119,102 @@ npx clawhub@latest install playwright-mcp
 
 ---
 
+### Humanizer — AI Writing De-AIification
+
+**What:** Detects and removes signs of AI-generated writing. Scans for 24 AI writing patterns using 500+ vocabulary terms, statistical text analysis (burstiness, perplexity), and applies safe auto-replacements to make text sound natural and human.
+
+**Install:** Prompted during setup, or manually:
+```bash
+npx clawhub@latest install humanizer
+# OR from GitHub:
+git clone --depth 1 https://github.com/brandonwise/humanizer.git ~/.openclaw/workspace/skills/humanizer
+```
+
+**Usage:** Agents automatically use the skill when writing content. Can also be run as a standalone CLI tool.
+
+**Links:**
+- GitHub: <https://github.com/brandonwise/humanizer>
+- ClawHub: `humanizer`
+
+---
+
+### Self-Improving Agent — Continuous Learning
+
+**What:** Captures errors, corrections, and lessons learned to enable continuous improvement. Automatically triggers when commands fail, users correct the agent, a better approach is discovered, or external APIs break. Reviews past learnings before major tasks.
+
+**Install:** Prompted during setup, or manually:
+```bash
+npx clawhub@latest install self-improving-agent
+```
+
+**How it works:**
+- Agent detects failures, corrections ("Actually...", "No, that's wrong..."), and outdated knowledge
+- Logs learnings to a structured file that persists across sessions
+- Reviews relevant learnings before starting new tasks to avoid repeating mistakes
+
+**Links:**
+- ClawHub: `self-improving-agent`
+
+---
+
+### Find Skills — Skill Discovery Helper
+
+**What:** Helps agents discover and install new skills on-the-fly from ClawHub. When you ask "how do I do X?" or "is there a skill for Y?", the agent searches the ClawHub marketplace for matching skills and can install them immediately.
+
+**Install:** Prompted during setup, or manually:
+```bash
+npx clawhub@latest install find-skills
+```
+
+**Links:**
+- ClawHub: `find-skills`
+- Marketplace: <https://clawhub.com>
+
+---
+
+### Marketing Skills — Marketing Reference Library
+
+**What:** 15+ marketing reference skills covering copywriting, CRO (conversion rate optimization), SEO audits, email sequences, A/B testing, pricing strategy, paid ads, social content, launch strategy, and more. Each skill provides structured frameworks and best practices the agent follows when working on marketing tasks.
+
+**Install:** Prompted during setup, or manually:
+```bash
+npx clawhub@latest install marketing-skills
+```
+
+**Included skills:**
+- Copywriting, Copy Editing
+- Page CRO, Signup Flow CRO, Form CRO, Popup CRO, Onboarding CRO, Paywall/Upgrade CRO
+- SEO Audit, Programmatic SEO, Schema Markup
+- Email Sequences, Social Content
+- A/B Test Setup, Analytics Tracking
+- Pricing Strategy, Launch Strategy
+- Paid Ads, Referral Programs
+- Marketing Ideas, Marketing Psychology
+- Competitor/Alternatives Pages, Free Tool Strategy
+
+**Links:**
+- ClawHub: `marketing-skills`
+
+---
+
+### Healthcheck — Host Security Hardening
+
+**What:** Built-in OpenClaw skill that audits host security: firewall configuration, SSH hardening, system updates, network exposure, and risk posture. Can be scheduled via heartbeat or cron for periodic security scans.
+
+**Install:** Built-in with OpenClaw (no separate install needed). Prompted during setup to verify availability.
+
+**Usage:**
+```
+"Run a healthcheck on this machine"
+"Check if SSH is hardened"
+"Audit my firewall configuration"
+```
+
+**Links:**
+- Built-in with OpenClaw
+
+---
+
 ## Observability & Security
 
 ### Clawmetry — Observability Dashboard
