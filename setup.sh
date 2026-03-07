@@ -39,9 +39,13 @@ warn()    { echo -e "${YELLOW}⚠️${NC}  $1"; }
 error()   { echo -e "${RED}❌${NC} $1"; }
 ask()     { echo -en "${CYAN}?${NC}  $1: "; }
 
-# Generate a random token
+# Generate a random token (use absolute paths to prevent PATH hijacking)
 random_token() {
-  openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null || head -c 64 /dev/urandom | xxd -p -c 64
+  /usr/bin/openssl rand -hex 32 2>/dev/null \
+    || /usr/bin/python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
+    || openssl rand -hex 32 2>/dev/null \
+    || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null \
+    || head -c 64 /dev/urandom | xxd -p -c 64
 }
 
 # ============================================================
@@ -1420,15 +1424,19 @@ register_mcp() {
     echo '{"mcpServers":{},"imports":[]}' > "$MCPORTER_CONFIG"
   fi
 
-  # Add the MCP server entry
-  python3 -c "
-import json, sys
-with open('$MCPORTER_CONFIG') as f:
+  # Add the MCP server entry (safe: uses env vars, not interpolated strings)
+  MCP_NAME="$name" MCP_COMMAND="$command" MCP_CONFIG_PATH="$MCPORTER_CONFIG" \
+  python3 -c '
+import json, os
+config_path = os.environ["MCP_CONFIG_PATH"]
+name = os.environ["MCP_NAME"]
+command = os.environ["MCP_COMMAND"]
+with open(config_path) as f:
     config = json.load(f)
-config.setdefault('mcpServers', {})['$name'] = {'command': '$command'}
-with open('$MCPORTER_CONFIG', 'w') as f:
+config.setdefault("mcpServers", {})[name] = {"command": command}
+with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
-" 2>/dev/null && success "$name registered in mcporter config" \
+' 2>/dev/null && success "$name registered in mcporter config" \
   || warn "Could not register $name in mcporter — add manually"
 
   # Also register for specialist agent workspaces
@@ -1439,14 +1447,18 @@ with open('$MCPORTER_CONFIG', 'w') as f:
       if [ ! -f "$AGENT_MCP" ]; then
         echo '{"mcpServers":{},"imports":[]}' > "$AGENT_MCP"
       fi
-      python3 -c "
-import json
-with open('$AGENT_MCP') as f:
+      MCP_NAME="$name" MCP_COMMAND="$command" MCP_CONFIG_PATH="$AGENT_MCP" \
+      python3 -c '
+import json, os
+config_path = os.environ["MCP_CONFIG_PATH"]
+name = os.environ["MCP_NAME"]
+command = os.environ["MCP_COMMAND"]
+with open(config_path) as f:
     config = json.load(f)
-config.setdefault('mcpServers', {})['$name'] = {'command': '$command'}
-with open('$AGENT_MCP', 'w') as f:
+config.setdefault("mcpServers", {})[name] = {"command": command}
+with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
-" 2>/dev/null
+' 2>/dev/null
     fi
   done
 }
@@ -1541,8 +1553,13 @@ main() {
       info "Aborting. Your existing config is untouched."
       exit 0
     fi
-    # Use mktemp for unpredictable backup filename
+    # Use mktemp for unpredictable backup filename; verify no symlink before copy
     BACKUP=$(mktemp "${CONFIG_FILE}.bak.XXXXXX")
+    if [ -L "$BACKUP" ]; then
+      error "Symlink detected at backup path — aborting for safety"
+      rm -f "$BACKUP"
+      exit 1
+    fi
     cp "$CONFIG_FILE" "$BACKUP"
     success "Backup created at $BACKUP"
     echo ""
