@@ -2248,22 +2248,126 @@ install_skill_deps() {
   echo -e "${GREEN}║${NC}  ${BOLD}Built-in Skills — Dependency Install${NC}        ${GREEN}║${NC}"
   echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
   echo ""
-  info "Installing dependencies for OpenClaw's built-in skills."
-  info "This replaces the interactive skills wizard with direct installs."
+  info "Installing dependencies for all OpenClaw built-in skills."
+  info "macOS-only skills will be skipped automatically on Linux."
   echo ""
 
   local BIN_DIR="$HOME/.local/bin"
   mkdir -p "$BIN_DIR"
-  export PATH="$BIN_DIR:$PATH"
+  export PATH="$BIN_DIR:$HOME/.cargo/bin:$PATH"
 
   local INSTALLED=0
   local SKIPPED=0
   local FAILED=0
 
+  # Helper: download a GitHub release binary tarball
+  # Usage: gh_release_install <repo> <bin_name> [version]
+  gh_release_install() {
+    local REPO="$1"
+    local BIN_NAME="$2"
+    local VERSION="${3:-latest}"
+    local ARCH="amd64"
+    [ "$(uname -m)" = "aarch64" ] && ARCH="arm64"
+
+    local TAG
+    if [ "$VERSION" = "latest" ]; then
+      TAG=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
+    else
+      TAG="$VERSION"
+    fi
+
+    if [ -z "$TAG" ]; then
+      return 1
+    fi
+
+    # Strip leading 'v' for filename patterns
+    local VER="${TAG#v}"
+    local BASE_NAME="${BIN_NAME}"
+
+    # Try common naming patterns
+    local URLS=(
+      "https://github.com/$REPO/releases/download/$TAG/${BASE_NAME}_${VER}_linux_${ARCH}.tar.gz"
+      "https://github.com/$REPO/releases/download/$TAG/${BASE_NAME}_linux_${ARCH}.tar.gz"
+      "https://github.com/$REPO/releases/download/$TAG/${BASE_NAME}-linux-${ARCH}.tar.gz"
+    )
+
+    local TMPFILE="/tmp/${BIN_NAME}_release.tar.gz"
+    for url in "${URLS[@]}"; do
+      if curl -fsSL -o "$TMPFILE" "$url" 2>/dev/null; then
+        (cd /tmp && tar xzf "$TMPFILE" "$BIN_NAME" 2>/dev/null || tar xzf "$TMPFILE" 2>/dev/null)
+        if [ -f "/tmp/$BIN_NAME" ]; then
+          mv "/tmp/$BIN_NAME" "$BIN_DIR/" && chmod +x "$BIN_DIR/$BIN_NAME"
+          rm -f "$TMPFILE"
+          return 0
+        fi
+      fi
+    done
+    rm -f "$TMPFILE"
+    return 1
+  }
+
+  # ============================================================
+  # System tools (via apt)
+  # ============================================================
+
+  echo -e "  ${BOLD}System packages:${NC}"
+
+  # --- ffmpeg (video-frames skill) ---
+  if ! command -v ffmpeg &>/dev/null; then
+    info "Installing ffmpeg..."
+    apt-get install -y -qq ffmpeg 2>/dev/null \
+      && success "ffmpeg installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "ffmpeg install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "ffmpeg ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- tmux ---
+  if ! command -v tmux &>/dev/null; then
+    info "Installing tmux..."
+    apt-get install -y -qq tmux 2>/dev/null \
+      && success "tmux installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "tmux install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "tmux ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- jq (session-logs, trello) ---
+  if ! command -v jq &>/dev/null; then
+    info "Installing jq..."
+    apt-get install -y -qq jq 2>/dev/null \
+      && success "jq installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "jq install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "jq ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- ripgrep (session-logs) ---
+  if ! command -v rg &>/dev/null; then
+    info "Installing ripgrep..."
+    apt-get install -y -qq ripgrep 2>/dev/null \
+      && success "ripgrep installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "ripgrep install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "ripgrep ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # ============================================================
+  # Python tools
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}Python tools:${NC}"
+
   # --- uv (Python package runner — needed by nano-banana-pro, nano-pdf) ---
   if ! command -v uv &>/dev/null; then
     info "Installing uv (Python package manager)..."
     if curl -LsSf https://astral.sh/uv/install.sh 2>/dev/null | sh 2>/dev/null; then
+      export PATH="$HOME/.local/bin:$PATH"
       success "uv installed"
       INSTALLED=$((INSTALLED + 1))
     else
@@ -2271,42 +2375,7 @@ install_skill_deps() {
       FAILED=$((FAILED + 1))
     fi
   else
-    success "uv already installed ($(uv --version 2>/dev/null))"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- sag (ElevenLabs TTS) ---
-  if ! command -v sag &>/dev/null; then
-    info "Installing sag (ElevenLabs TTS)..."
-    local SAG_ARCH="amd64"
-    [ "$(uname -m)" = "aarch64" ] && SAG_ARCH="arm64"
-    local SAG_URL="https://github.com/steipete/sag/releases/latest/download/sag_$(curl -s https://api.github.com/repos/steipete/sag/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')_linux_${SAG_ARCH}.tar.gz"
-    if curl -fsSL -o /tmp/sag.tar.gz "$SAG_URL" 2>/dev/null; then
-      (cd /tmp && tar xzf sag.tar.gz sag 2>/dev/null && mv sag "$BIN_DIR/" && chmod +x "$BIN_DIR/sag")
-      rm -f /tmp/sag.tar.gz
-      success "sag installed to $BIN_DIR/sag"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not download sag. Install manually from: https://github.com/steipete/sag/releases"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "sag already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- Gemini CLI (Google AI) ---
-  if ! command -v gemini &>/dev/null; then
-    info "Installing Gemini CLI..."
-    if npm install -g @google/gemini-cli 2>/dev/null; then
-      success "Gemini CLI installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not install Gemini CLI. Install manually: npm install -g @google/gemini-cli"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "Gemini CLI already installed"
+    success "uv ✓ ($(uv --version 2>/dev/null))"
     SKIPPED=$((SKIPPED + 1))
   fi
 
@@ -2319,18 +2388,116 @@ install_skill_deps() {
         || { warn "nano-pdf install failed"; FAILED=$((FAILED + 1)); }
     else
       warn "Skipping nano-pdf (uv not available)"
-      SKIPPED=$((SKIPPED + 1))
+      FAILED=$((FAILED + 1))
     fi
   else
-    success "nano-pdf already installed"
+    success "nano-pdf ✓"
     SKIPPED=$((SKIPPED + 1))
   fi
 
-  # --- gh CLI (GitHub) ---
+  # --- openai-whisper (local speech-to-text) ---
+  if ! command -v whisper &>/dev/null; then
+    info "Installing openai-whisper (local STT)..."
+    if command -v uv &>/dev/null; then
+      uv tool install openai-whisper 2>/dev/null \
+        && success "openai-whisper installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "openai-whisper install failed (may need PyTorch)"; FAILED=$((FAILED + 1)); }
+    elif command -v pip3 &>/dev/null; then
+      pip3 install --break-system-packages openai-whisper 2>/dev/null \
+        && success "openai-whisper installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "openai-whisper install failed"; FAILED=$((FAILED + 1)); }
+    else
+      warn "Skipping openai-whisper (no uv or pip3)"
+      FAILED=$((FAILED + 1))
+    fi
+  else
+    success "openai-whisper ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # ============================================================
+  # Node.js / npm tools
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}Node.js tools:${NC}"
+
+  # --- clawhub (skill marketplace) ---
+  if ! command -v clawhub &>/dev/null; then
+    info "Installing clawhub..."
+    npm install -g clawhub 2>/dev/null \
+      && success "clawhub installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "clawhub install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "clawhub ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- mcporter (MCP server management) ---
+  if ! command -v mcporter &>/dev/null; then
+    info "Installing mcporter..."
+    npm install -g mcporter 2>/dev/null \
+      && success "mcporter installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "mcporter install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "mcporter ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- Gemini CLI (Google AI) ---
+  if ! command -v gemini &>/dev/null; then
+    info "Installing Gemini CLI..."
+    npm install -g @google/gemini-cli 2>/dev/null \
+      && success "Gemini CLI installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "Gemini CLI install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "Gemini CLI ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- oracle (web search/scrape CLI) ---
+  if ! command -v oracle &>/dev/null; then
+    info "Installing oracle..."
+    npm install -g @steipete/oracle 2>/dev/null \
+      && success "oracle installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "oracle install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "oracle ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- summarize (URL/file/YouTube summarizer) ---
+  if ! command -v summarize &>/dev/null; then
+    info "Installing summarize..."
+    npm install -g @steipete/summarize 2>/dev/null \
+      && success "summarize installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "summarize install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "summarize ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- obsidian-cli (vault management) ---
+  if ! command -v obsidian-cli &>/dev/null; then
+    info "Installing obsidian-cli..."
+    npm install -g obsidian-cli 2>/dev/null \
+      && success "obsidian-cli installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "obsidian-cli install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "obsidian-cli ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # ============================================================
+  # GitHub CLI (special install — official apt repo)
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}GitHub CLI:${NC}"
+
   if ! command -v gh &>/dev/null; then
     info "Installing GitHub CLI (gh)..."
     if command -v apt-get &>/dev/null; then
-      # Official GitHub CLI repo for Debian/Ubuntu
       (type -p wget >/dev/null || apt-get install -y -qq wget) \
         && mkdir -p -m 755 /etc/apt/keyrings \
         && out=$(mktemp) && wget -nv -O"$out" https://cli.github.com/packages/githubcli-archive-keyring.gpg 2>/dev/null \
@@ -2342,106 +2509,284 @@ install_skill_deps() {
         || { warn "gh install failed — install manually: https://cli.github.com"; FAILED=$((FAILED + 1)); }
       rm -f "$out" 2>/dev/null
     else
-      warn "Could not install gh CLI. Install manually: https://cli.github.com"
+      warn "Could not install gh CLI (no apt). Install manually: https://cli.github.com"
       FAILED=$((FAILED + 1))
     fi
   else
-    success "gh CLI already installed ($(gh --version 2>/dev/null | head -1))"
+    success "gh CLI ✓ ($(gh --version 2>/dev/null | head -1))"
     SKIPPED=$((SKIPPED + 1))
   fi
 
-  # --- ffmpeg (video-frames skill) ---
-  if ! command -v ffmpeg &>/dev/null; then
-    info "Installing ffmpeg..."
-    if apt-get install -y -qq ffmpeg 2>/dev/null; then
-      success "ffmpeg installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not install ffmpeg. Install manually: apt-get install ffmpeg"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "ffmpeg already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
+  # ============================================================
+  # 1Password CLI (official Linux install)
+  # ============================================================
 
-  # --- tmux ---
-  if ! command -v tmux &>/dev/null; then
-    info "Installing tmux..."
-    if apt-get install -y -qq tmux 2>/dev/null; then
-      success "tmux installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not install tmux. Install manually: apt-get install tmux"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "tmux already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- jq (session-logs, trello) ---
-  if ! command -v jq &>/dev/null; then
-    info "Installing jq..."
-    if apt-get install -y -qq jq 2>/dev/null; then
-      success "jq installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not install jq"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "jq already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- ripgrep (session-logs) ---
-  if ! command -v rg &>/dev/null; then
-    info "Installing ripgrep..."
-    if apt-get install -y -qq ripgrep 2>/dev/null; then
-      success "ripgrep installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      warn "Could not install ripgrep"
-      FAILED=$((FAILED + 1))
-    fi
-  else
-    success "ripgrep already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- clawhub (skill marketplace CLI — already handled in preflight but ensure) ---
-  if ! command -v clawhub &>/dev/null; then
-    info "Installing clawhub..."
-    npm install -g clawhub 2>/dev/null \
-      && success "clawhub installed" && INSTALLED=$((INSTALLED + 1)) \
-      || { warn "clawhub install failed"; FAILED=$((FAILED + 1)); }
-  else
-    success "clawhub already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- mcporter (MCP server management — already installed by our optional step) ---
-  if ! command -v mcporter &>/dev/null; then
-    info "Installing mcporter..."
-    npm install -g mcporter 2>/dev/null \
-      && success "mcporter installed" && INSTALLED=$((INSTALLED + 1)) \
-      || { warn "mcporter install failed"; FAILED=$((FAILED + 1)); }
-  else
-    success "mcporter already installed"
-    SKIPPED=$((SKIPPED + 1))
-  fi
-
-  # --- Summary ---
   echo ""
-  info "Skills dependencies: ${INSTALLED} installed, ${SKIPPED} already present, ${FAILED} failed"
-  if [ "$FAILED" -gt 0 ]; then
-    warn "Some installs failed. Run 'openclaw doctor' later to check skill status."
+  echo -e "  ${BOLD}1Password CLI:${NC}"
+
+  if ! command -v op &>/dev/null; then
+    info "Installing 1Password CLI..."
+    if command -v apt-get &>/dev/null; then
+      curl -sS https://downloads.1password.com/linux/keys/1password.asc 2>/dev/null \
+        | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null \
+        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+          | tee /etc/apt/sources.list.d/1password.list > /dev/null \
+        && mkdir -p /etc/debsig/policies/AC2D62742012EA22/ \
+        && curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol \
+          | tee /etc/debsig/policies/AC2D62742012EA22/1password.pol > /dev/null \
+        && mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
+        && curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+          | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg 2>/dev/null \
+        && apt-get update -qq && apt-get install -y -qq 1password-cli \
+        && success "1Password CLI installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "1Password CLI install failed"; FAILED=$((FAILED + 1)); }
+    else
+      warn "Skipping 1Password CLI (no apt)"
+      FAILED=$((FAILED + 1))
+    fi
+  else
+    success "1Password CLI ✓ ($(op --version 2>/dev/null))"
+    SKIPPED=$((SKIPPED + 1))
   fi
 
-  # Note about macOS-only skills
-  info "Some skills (Apple Notes, Apple Reminders, iMessage, Peekaboo, etc.) are macOS-only."
-  info "Run 'openclaw configure --section skills' for API key setup after install."
+  # ============================================================
+  # GitHub Release binaries (Go-based tools)
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}CLI tools (GitHub releases):${NC}"
+
+  # --- sag (ElevenLabs TTS) ---
+  if ! command -v sag &>/dev/null; then
+    info "Installing sag (ElevenLabs TTS)..."
+    gh_release_install "steipete/sag" "sag" \
+      && success "sag installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "sag install failed — https://github.com/steipete/sag/releases"; FAILED=$((FAILED + 1)); }
+  else
+    success "sag ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- gog (Gmail/Calendar/Drive CLI) ---
+  if ! command -v gog &>/dev/null; then
+    info "Installing gog (Google Workspace CLI)..."
+    gh_release_install "steipete/gogcli" "gog" \
+      && success "gog installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "gog install failed — try: go install github.com/steipete/gogcli@latest"; FAILED=$((FAILED + 1)); }
+  else
+    success "gog ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- goplaces (Google Places CLI) ---
+  if ! command -v goplaces &>/dev/null; then
+    info "Installing goplaces..."
+    gh_release_install "steipete/goplaces" "goplaces" \
+      && success "goplaces installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "goplaces install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "goplaces ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- camsnap (camera snapshot CLI) ---
+  if ! command -v camsnap &>/dev/null; then
+    info "Installing camsnap..."
+    gh_release_install "steipete/camsnap" "camsnap" \
+      && success "camsnap installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "camsnap install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "camsnap ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- openhue (Philips Hue CLI) ---
+  if ! command -v openhue &>/dev/null; then
+    info "Installing openhue..."
+    local OPENHUE_ARCH="x86_64"
+    [ "$(uname -m)" = "aarch64" ] && OPENHUE_ARCH="arm64"
+    local OPENHUE_TAG
+    OPENHUE_TAG=$(curl -s "https://api.github.com/repos/openhue/openhue-cli/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
+    if [ -n "$OPENHUE_TAG" ]; then
+      local OPENHUE_URL="https://github.com/openhue/openhue-cli/releases/download/$OPENHUE_TAG/openhue_Linux_${OPENHUE_ARCH}.tar.gz"
+      if curl -fsSL -o /tmp/openhue.tar.gz "$OPENHUE_URL" 2>/dev/null; then
+        (cd /tmp && tar xzf openhue.tar.gz openhue 2>/dev/null && mv openhue "$BIN_DIR/" && chmod +x "$BIN_DIR/openhue")
+        rm -f /tmp/openhue.tar.gz
+        success "openhue installed"
+        INSTALLED=$((INSTALLED + 1))
+      else
+        warn "openhue download failed"
+        FAILED=$((FAILED + 1))
+      fi
+    else
+      warn "Could not determine openhue version"
+      FAILED=$((FAILED + 1))
+    fi
+  else
+    success "openhue ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- himalaya (IMAP email CLI) ---
+  if ! command -v himalaya &>/dev/null; then
+    info "Installing himalaya (email CLI)..."
+    local HIMA_ARCH="x86_64"
+    [ "$(uname -m)" = "aarch64" ] && HIMA_ARCH="aarch64"
+    local HIMA_TAG
+    HIMA_TAG=$(curl -s "https://api.github.com/repos/pimalaya/himalaya/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
+    if [ -n "$HIMA_TAG" ]; then
+      local HIMA_URL="https://github.com/pimalaya/himalaya/releases/download/$HIMA_TAG/himalaya.${HIMA_ARCH}-linux.tgz"
+      if curl -fsSL -o /tmp/himalaya.tgz "$HIMA_URL" 2>/dev/null; then
+        (cd /tmp && tar xzf himalaya.tgz && mv himalaya "$BIN_DIR/" && chmod +x "$BIN_DIR/himalaya")
+        rm -f /tmp/himalaya.tgz
+        success "himalaya installed"
+        INSTALLED=$((INSTALLED + 1))
+      else
+        warn "himalaya download failed"
+        FAILED=$((FAILED + 1))
+      fi
+    else
+      warn "Could not determine himalaya version"
+      FAILED=$((FAILED + 1))
+    fi
+  else
+    success "himalaya ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # --- spogo (Spotify CLI) ---
+  if ! command -v spogo &>/dev/null; then
+    info "Installing spogo (Spotify CLI)..."
+    gh_release_install "steipete/spogo" "spogo" \
+      && success "spogo installed" && INSTALLED=$((INSTALLED + 1)) \
+      || { warn "spogo install failed"; FAILED=$((FAILED + 1)); }
+  else
+    success "spogo ✓"
+    SKIPPED=$((SKIPPED + 1))
+  fi
+
+  # ============================================================
+  # Go-installable tools (require Go runtime)
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}Go-based tools:${NC}"
+
+  if command -v go &>/dev/null; then
+    # --- blogwatcher ---
+    if ! command -v blogwatcher &>/dev/null; then
+      info "Installing blogwatcher..."
+      go install github.com/Hyaxia/blogwatcher/cmd/blogwatcher@latest 2>/dev/null \
+        && success "blogwatcher installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "blogwatcher install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "blogwatcher ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- blucli (Bluetooth CLI) ---
+    if ! command -v blu &>/dev/null; then
+      info "Installing blucli..."
+      go install github.com/steipete/blucli/cmd/blu@latest 2>/dev/null \
+        && success "blucli installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "blucli install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "blucli ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- eightctl (8sleep CLI) ---
+    if ! command -v eightctl &>/dev/null; then
+      info "Installing eightctl..."
+      go install github.com/steipete/eightctl/cmd/eightctl@latest 2>/dev/null \
+        && success "eightctl installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "eightctl install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "eightctl ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- gifgrep ---
+    if ! command -v gifgrep &>/dev/null; then
+      info "Installing gifgrep..."
+      go install github.com/steipete/gifgrep/cmd/gifgrep@latest 2>/dev/null \
+        && success "gifgrep installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "gifgrep install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "gifgrep ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- ordercli (food ordering) ---
+    if ! command -v ordercli &>/dev/null; then
+      info "Installing ordercli..."
+      go install github.com/steipete/ordercli/cmd/ordercli@latest 2>/dev/null \
+        && success "ordercli installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "ordercli install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "ordercli ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- wacli (WhatsApp CLI) ---
+    if ! command -v wacli &>/dev/null; then
+      info "Installing wacli..."
+      go install github.com/steipete/wacli/cmd/wacli@latest 2>/dev/null \
+        && success "wacli installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "wacli install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "wacli ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- sonoscli (Sonos CLI) ---
+    if ! command -v sonos &>/dev/null; then
+      info "Installing sonoscli..."
+      go install github.com/steipete/sonoscli/cmd/sonos@latest 2>/dev/null \
+        && success "sonoscli installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "sonoscli install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "sonoscli ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # --- songsee (audio spectrograms) ---
+    if ! command -v songsee &>/dev/null; then
+      info "Installing songsee..."
+      go install github.com/steipete/songsee@latest 2>/dev/null \
+        && success "songsee installed" && INSTALLED=$((INSTALLED + 1)) \
+        || { warn "songsee install failed"; FAILED=$((FAILED + 1)); }
+    else
+      success "songsee ✓"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+  else
+    info "Go not installed — skipping Go-based tools"
+    info "(blogwatcher, blucli, eightctl, gifgrep, ordercli, wacli, sonoscli, songsee)"
+    info "Install Go: https://go.dev/dl/ then re-run setup"
+    SKIPPED=$((SKIPPED + 8))
+  fi
+
+  # ============================================================
+  # macOS-only skills (skip on Linux)
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}Skipped (macOS-only):${NC}"
+  info "apple-notes (memo), apple-reminders (remindctl), bear-notes (grizzly),"
+  info "imsg, peekaboo, things-mac, model-usage (codexbar)"
+
+  # ============================================================
+  # Summary
+  # ============================================================
+
+  echo ""
+  echo -e "  ${BOLD}────────────────────────────────${NC}"
+  success "Skills dependencies: ${INSTALLED} installed, ${SKIPPED} already present, ${FAILED} failed"
+  if [ "$FAILED" -gt 0 ]; then
+    warn "Some installs failed. Run 'openclaw doctor' to check skill status."
+  fi
+  info "API keys can be configured later: openclaw configure --section skills"
   echo ""
 }
 
